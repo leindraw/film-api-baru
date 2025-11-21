@@ -22,6 +22,9 @@ git commit -m "Initial commit: Setup Express project structure"
 
 5. Hubungkan ke GitHub (Remote Repository)
 git remote add origin https://github.com/USERNAME_ANDA/NAMA_REPO_ANDA.git
+
+get remote set-url origin ttps://github.com/USERNAME_ANDA/NAMA_REPO_ANDA.git
+
 ## contoh git remote add origin https://github.com/leindraw/api-film.git
 
 6. Ganti Nama Branch
