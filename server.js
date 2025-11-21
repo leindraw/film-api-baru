@@ -1,122 +1,46 @@
 require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
-const connectDB = require('./config/database');
-const Movie = require('./models/Movie');
-
-connectDB(); // Panggil fungsi koneksi di awal
+const db = require('./db.js');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
+const { authenticateToken, authorizeRole } = require('./middleware/authMiddleware.js');
 
 const app = express();
-const PORT = process.env.PORT || 3300; // Gunakan PORT dari .env
+const PORT = process.env.PORT || 3300;
+const JWT_SECRET = process.env.JWT_SECRET;
+
 app.use(cors());
 app.use(express.json());
 
-// Rute-rute akan ditempatkan di sini...
 app.get('/status', (req, res) => {
     res.json({ ok: true, service: 'film-api' });
 });
 
-app.get('/movies', async (req, res, next) => {
-    try {
-        const movie = await Movie.find({});
-        res.json(movie);
-    } catch (err) {
-        next(err);
+// === AUTH ROUTES ===
+app.post('/auth/register', async (req, res, next) => {
+    const { username, password } = req.body;
+    if (!username || !password || password.length < 6) {
+        return res.status(400).json({ error: 'Username dan password (min 6 char) harus diisi' });
     }
-});
-
-app.get('/movies/:id', async (req, res, next) => {
     try {
-        const movie = await Movie.findById(req.params.id);
-        if (!movie) {
-            return res.status(404).json({
-                error: 'Film tidak ditemukan'
-            });
-        }
-        res.json(movie);
-    } catch (err) {
-        if (err.kind === 'ObjectId') {
-            return res.status(400).json({
-                error: 'Format ID tidak valid'
-            });
-        }
-        next(err);
-    }
-});
+        const salt = await bcrypt.genSalt(10);
+        const hashedPassword = await bcrypt.hash(password, salt);
+        const sql = `
+        INSERT INTO users (username, password, role) 
+        VALUES ($1, $2, $3) 
+        RETURNING id, username`;
 
-app.post('/movies', async (req, res, next) => {
-    try {
-        const { title, director, year } = req.body;
-        const newMovie = new Movie({
-            title: req.body.title,
-            director: director,
-            year: year
-        });
-        const savedMovie = await newMovie.save();
-        res.status(201).json(savedMovie);
+        const result = await db.query(sql, [username.toLowerCase(), hashedPassword, 'user']);
+        res.status(201).json(result.rows[0]);
+
     } catch (err) {
-        if (err.name === 'ValidationError') {
-            return res.status(400).json({ error: err.message });
+        if (err.code === '23505') {
+            return res.status(409).json({ error: 'Username sudah digunakan' });
         }
         next(err);
     }
 });
-
-app.put('/movies/:id', async (req, res, next) => {
-    try {
-        const { title, director, year } = req.body;
-        if (!title || !director || !year) {
-            return res.status(400).json({
-                error: 'title, director, year wajib diisi'
-            });
-        }
-        const updatedMovie = await Movie.findByIdAndUpdate(
-            req.params.id,
-            { title, director, year }, // Hanya update field ini
-            { new: true, runValidators: true }
-        );
-
-        if (!updatedMovie) {
-            return res.status(404).json({
-                error: 'Film tidak ditemukan'
-            });
-        }
-        res.json(updatedMovie);
-
-
-    } catch (err) {
-        if (err.name === 'ValidationError') {
-            return res.status(400).json({ error: err.message });
-        }
-        if (err.kind === 'ObjectId') {
-            return res.status(400).json({
-                error: 'Format ID tidak valid'
-            });
-        }
-        next(err);
-    }
-});
-
-app.delete('/movies/:id', async (req, res, next) => {
-    try {
-        const deletedMovie = await Movie.findByIdAndDelete(req.params.id);
-        if (!deletedMovie) {
-            return res.status(404).json({
-                error: 'Film tidak ditemukan'
-            });
-        }
-        res.status(204).send();
-
-    } catch (err) {
-        if (err.kind === 'ObjectId') {
-            return res.status(400).json({
-                error: 'Format ID tidak valid'
-            });
-        }
-        next(err);
-    }
-});
-
 
 
 // Fallback 404
